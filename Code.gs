@@ -102,7 +102,7 @@ function testConnection() {
 
 function testWhatsApp() {
  const message = "Test pengiriman WhatsApp dari Sistem Presensi";
- const number = "6285648811419"; // Ganti dengan nomor test
+ const number = "<GANTI_HP_TEST>"; // Ganti dengan nomor test
  
  const result = sendWhatsApp(number, message);
  
