@@ -1,0 +1,376 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sistem Presensi</title>
+  <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+  <style>
+    .loading {
+      position: relative;
+    }
+    .loading:after {
+      content: '';
+      position: absolute;
+      width: 20px;
+      height: 20px;
+      top: 50%;
+      left: 50%;
+      margin: -10px 0 0 -10px;
+      border: 3px solid #f3f3f3;
+      border-top: 3px solid #3498db;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+    }
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+    .rfid-input:focus {
+      outline: none;
+      box-shadow: 0 0 0 3px rgba(66, 153, 225, 0.5);
+    }
+  </style>
+</head>
+<body class="bg-gray-100">
+  <div class="container mx-auto px-4 py-8">
+    <div class="max-w-md mx-auto bg-white rounded-xl shadow-md overflow-hidden md:max-w-2xl p-6">
+      
+      <!-- Logo -->
+      <div class="flex justify-center mb-6">
+        <img src="<?!= CONFIG.LOGO_BASE64 ?>" 
+             alt="Logo"
+             class="h-20"
+             onerror="this.src='https://via.placeholder.com/80x80?text=Logo'" />
+      </div>
+
+      <!-- Header -->
+      <div class="text-center mb-6">
+        <h1 class="text-2xl font-bold text-gray-800">Sistem Presensi</h1>
+        <p class="text-sm text-gray-600 mt-1">Scan RFID atau masukkan ID manual</p>
+      </div>
+      
+      <!-- Status System -->
+      <div class="mb-4 text-center">
+        <div id="systemStatus" class="text-sm font-medium text-green-600">
+          System Ready
+        </div>
+        <div id="lastUpdate" class="text-xs text-gray-500 mt-1"></div>
+      </div>
+      
+      <!-- Input Form -->
+      <div class="mb-4">
+        <input type="text" 
+               id="rfidInput" 
+               class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
+               placeholder="Masukkan ID"
+               autocomplete="off"
+               autofocus>
+      </div>
+
+      <!-- Result Display -->
+      <div id="result" class="hidden mt-4 p-4 rounded-lg text-center">
+      </div>
+
+      <!-- Debug Buttons -->
+      <div class="mt-6 text-center space-x-2">
+        <button onclick="testSystem()" 
+                class="px-4 py-2 bg-gray-200 text-gray-700 rounded hover:bg-gray-300">
+          Test Koneksi
+        </button>
+        <button onclick="testWA()" 
+                class="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600">
+          Test WA
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Update last scan time
+    function updateLastScan() {
+      const lastUpdate = document.getElementById('lastUpdate');
+      lastUpdate.textContent = `Last update: ${new Date().toLocaleTimeString()}`;
+    }
+
+    // Test WhatsApp
+    function testWA() {
+      const result = document.getElementById('result');
+      const systemStatus = document.getElementById('systemStatus');
+      
+      result.classList.remove('hidden');
+      result.className = 'mt-4 p-4 rounded-lg bg-blue-100 text-blue-800';
+      result.textContent = 'Testing WhatsApp...';
+      
+      systemStatus.textContent = 'Testing WA...';
+      
+      google.script.run
+        .withSuccessHandler((response) => {
+          result.classList.remove('hidden');
+          updateLastScan();
+          
+          if (response.status === 'success') {
+            result.className = 'mt-4 p-4 rounded-lg bg-green-100 text-green-800';
+            systemStatus.textContent = 'WA Test Success';
+            systemStatus.className = 'text-sm font-medium text-green-600';
+          } else {
+            result.className = 'mt-4 p-4 rounded-lg bg-yellow-100 text-yellow-800';
+            systemStatus.textContent = 'WA Test Failed';
+            systemStatus.className = 'text-sm font-medium text-yellow-600';
+          }
+          
+          result.textContent = response.message;
+
+          setTimeout(() => {
+            systemStatus.textContent = 'System Ready';
+            systemStatus.className = 'text-sm font-medium text-green-600';
+            result.classList.add('hidden');
+          }, 10000);
+        })
+        .withFailureHandler((error) => {
+          result.classList.remove('hidden');
+          result.className = 'mt-4 p-4 rounded-lg bg-red-100 text-red-800';
+          result.textContent = 'Error: ' + (error.message || 'Gagal test WA');
+          
+          systemStatus.textContent = 'Error';
+          systemStatus.className = 'text-sm font-medium text-red-600';
+          
+          setTimeout(() => {
+            systemStatus.textContent = 'System Ready';
+            systemStatus.className = 'text-sm font-medium text-green-600';
+            result.classList.add('hidden');
+          }, 10000);
+        })
+        .testWhatsApp();
+    }
+
+    // Debounce function
+    function debounce(func, wait) {
+      let timeout;
+      return function executedFunction(...args) {
+        const later = () => {
+          clearTimeout(timeout);
+          func(...args);
+        };
+        clearTimeout(timeout);
+        timeout = setTimeout(later, wait);
+      };
+    }
+
+const handleRFID = debounce(async (rfid) => {
+  if (!rfid) return;
+  
+  const result = document.getElementById('result');
+  const systemStatus = document.getElementById('systemStatus');
+  const input = document.getElementById('rfidInput');
+  
+  try {
+    // Show loading state dengan info pencarian
+    result.classList.remove('hidden');
+    result.className = 'mt-4 p-4 rounded-lg bg-blue-100 text-blue-800';
+    result.innerHTML = `
+      <div class="text-center">
+        <div class="font-bold mb-2">Memproses RFID: ${rfid}</div>
+        <div class="text-sm">
+          <div class="animate-pulse">Mencari data siswa...</div>
+        </div>
+      </div>
+    `;
+    systemStatus.textContent = 'Processing...';
+    
+    // Disable input while processing
+    input.disabled = true;
+
+    google.script.run
+  .withSuccessHandler((responseStr) => {
+    try {
+      console.log('Raw response:', responseStr);
+      const response = JSON.parse(responseStr);
+      
+      input.disabled = false;
+      input.focus();
+      input.value = '';
+
+      result.classList.remove('hidden');
+      updateLastScan();
+      
+      if (response.status === 'success') {
+        const studentInfo = `
+          <div class="text-center p-4">
+            <div class="bg-green-100 p-3 rounded-lg mb-4">
+              <span class="text-green-800 font-bold text-lg">✓ ${response.message}</span>
+            </div>
+            <div class="bg-white rounded-lg shadow-md p-4">
+              <table class="w-full text-left">
+                <tr>
+                  <td class="font-semibold py-1 pr-4">NIS</td>
+                  <td>: ${response.data.nis}</td>
+                </tr>
+                <tr>
+                  <td class="font-semibold py-1 pr-4">Nama</td>
+                  <td>: ${response.data.nama}</td>
+                </tr>
+                <tr>
+                  <td class="font-semibold py-1 pr-4">Kelas</td>
+                  <td>: ${response.data.kelas}</td>
+                </tr>
+                <tr>
+                  <td class="font-semibold py-1 pr-4">Keahlian</td>
+                  <td>: ${response.data.keahlian}</td>
+                </tr>
+                <tr>
+                  <td class="font-semibold py-1 pr-4">Status</td>
+                  <td>: ${response.data.status}</td>
+                </tr>
+                <tr>
+                  <td class="font-semibold py-1 pr-4">Waktu</td>
+                  <td>: ${new Date(response.data.timestamp).toLocaleTimeString()}</td>
+                </tr>
+              </table>
+            </div>
+          </div>
+        `;
+        
+        result.className = 'mt-4 bg-green-50 rounded-lg';
+        result.innerHTML = studentInfo;
+        systemStatus.textContent = 'Success';
+        systemStatus.className = 'text-sm font-medium text-green-600';
+      } else {
+        throw new Error(response.message || 'Terjadi kesalahan');
+      }
+
+    } catch (error) {
+      console.error('Error parsing response:', error);
+      result.className = 'mt-4 p-4 rounded-lg bg-red-100';
+      result.innerHTML = `
+        <div class="text-center">
+          <div class="text-red-800 font-bold mb-2">⚠️ Error</div>
+          <div class="text-red-700">${error.message}</div>
+        </div>
+      `;
+      systemStatus.textContent = 'Error';
+      systemStatus.className = 'text-sm font-medium text-red-600';
+    }
+
+    // Reset after delay
+    setTimeout(() => {
+      systemStatus.textContent = 'System Ready';
+      systemStatus.className = 'text-sm font-medium text-green-600';
+      result.classList.add('hidden');
+    }, 10000);
+  })
+  .withFailureHandler((error) => {
+    console.error('Server error:', error);
+    input.disabled = false;
+    input.focus();
+    input.value = '';
+
+    result.classList.remove('hidden');
+    result.className = 'mt-4 p-4 rounded-lg bg-red-100';
+    result.innerHTML = `
+      <div class="text-center">
+        <div class="text-red-800 font-bold mb-2">⚠️ Error</div>
+        <div class="text-red-700">
+          ${error.message || 'Gagal terhubung ke server'}
+        </div>
+      </div>
+    `;
+    
+    systemStatus.textContent = 'Error';
+    systemStatus.className = 'text-sm font-medium text-red-600';
+  })
+  .processRFID(rfid);
+      
+  } catch (error) {
+    console.error('Try-catch error:', error);
+    result.innerHTML = `
+      <div class="text-center">
+        <div class="text-red-800 font-bold mb-2">⚠️ Error</div>
+        <div class="text-red-700">
+          Terjadi kesalahan: ${error.message}
+        </div>
+      </div>
+    `;
+  }
+}, 300);
+
+    // Test system connection
+    function testSystem() {
+      const result = document.getElementById('result');
+      const systemStatus = document.getElementById('systemStatus');
+      
+      result.classList.remove('hidden');
+      result.className = 'mt-4 p-4 rounded-lg bg-blue-100 text-blue-800';
+      result.textContent = 'Testing connection...';
+      
+      systemStatus.textContent = 'Testing...';
+      
+      google.script.run
+        .withSuccessHandler((response) => {
+          result.classList.remove('hidden');
+          updateLastScan();
+          
+          if (response.status === 'success') {
+            result.className = 'mt-4 p-4 rounded-lg bg-green-100 text-green-800';
+            systemStatus.textContent = 'Connected';
+            systemStatus.className = 'text-sm font-medium text-green-600';
+          } else {
+            result.className = 'mt-4 p-4 rounded-lg bg-yellow-100 text-yellow-800';
+            systemStatus.textContent = 'Warning';
+            systemStatus.className = 'text-sm font-medium text-yellow-600';            
+          }
+          
+          result.textContent = response.message;
+
+          setTimeout(() => {
+            systemStatus.textContent = 'System Ready';
+            systemStatus.className = 'text-sm font-medium text-green-600';
+            result.classList.add('hidden');
+          }, 10000);
+        })
+        .withFailureHandler((error) => {
+          result.classList.remove('hidden');
+          result.className = 'mt-4 p-4 rounded-lg bg-red-100 text-red-800';
+          result.textContent = 'Error: ' + (error.message || 'Gagal terhubung');
+          
+          systemStatus.textContent = 'Error';
+          systemStatus.className = 'text-sm font-medium text-red-600';
+          
+          setTimeout(() => {
+            systemStatus.textContent = 'System Ready';
+            systemStatus.className = 'text-sm font-medium text-green-600';
+            result.classList.add('hidden');
+          }, 10000);
+        })
+        .testConnection();
+    }
+
+    // Event listeners
+    document.addEventListener('DOMContentLoaded', () => {
+      const input = document.getElementById('rfidInput');
+      updateLastScan();
+      
+      input.addEventListener('input', (e) => {
+        handleRFID(e.target.value);
+      });
+      
+      // Auto focus input
+      input.focus();
+      
+      // Prevent form submission
+      document.addEventListener('submit', (e) => e.preventDefault());
+      
+      // Keep focus on input
+      document.addEventListener('click', () => input.focus());
+    });
+  
+  // Tambahkan ini di bagian bawah script
+window.onerror = function(msg, url, lineNo, columnNo, error) {
+  console.error('Window error: ', msg, url, lineNo, columnNo, error);
+  return false;
+};
+  </script>
+
+</body>
+</html>
