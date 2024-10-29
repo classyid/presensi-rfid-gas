@@ -1,7 +1,7 @@
 # 📚 Sistem Presensi Sekolah dengan Google Apps Script
 
 <p align="center">
-  <img src="path_to_logo.png" alt="Logo Sistem Presensi" width="200"/>
+  <img src="https://blog.classy.id/upload/gambar_berita/df884a028c6d155345ed5fed50814970_20241029134256.png" alt="Logo Sistem Presensi" width="200"/>
 </p>
 
 > Sistem presensi sekolah modern berbasis RFID dengan notifikasi realtime, dibangun menggunakan Google Apps Script dan spreadsheet sebagai database.
